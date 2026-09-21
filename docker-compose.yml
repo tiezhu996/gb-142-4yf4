@@ -1,0 +1,53 @@
+name: gbcarenotify
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: gbcarenotify-mysql
+    environment:
+      MYSQL_DATABASE: ${DB_NAME:-care_notify}
+      MYSQL_USER: ${DB_USER:-care_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-care_password}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+    ports:
+      - "${DB_PORT:-5742}:3306"
+    volumes:
+      - gbcarenotify_mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: gbcarenotify-backend
+    environment:
+      PORT: 8080
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-care_notify}
+      DB_USER: ${DB_USER:-care_user}
+      DB_PASSWORD: ${DB_PASSWORD:-care_password}
+      API_KEY: ${API_KEY:-change-me-for-external-query}
+      CONFIRM_TIMEOUT_MINUTES: ${CONFIRM_TIMEOUT_MINUTES:-1440}
+      CRON_GREETING: "0 * * * *"
+      CRON_ALERT: "*/10 * * * *"
+    ports:
+      - "${BACKEND_PORT:-3242}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  gbcarenotify_mysql_data:

@@ -1,0 +1,25 @@
+openapi: 3.0.3
+info:
+  title: Care Notification Service API
+  version: 1.0.0
+  description: 关怀对象、短信模板、确认回执和发送日志接口。
+paths:
+  /healthz:
+    get:
+      summary: 健康检查
+      responses: { '200': { description: healthy } }
+  /api/v1/recipients:
+    get: { summary: 关怀对象列表, responses: { '200': { description: success } } }
+    post: { summary: 新增关怀对象, responses: { '201': { description: created } } }
+  /api/v1/recipients/{id}/confirmations:
+    post: { summary: 记录回复确认, responses: { '200': { description: confirmed } } }
+  /api/v1/templates:
+    get: { summary: 模板列表, responses: { '200': { description: success } } }
+    post: { summary: 新增模板, responses: { '201': { description: created } } }
+  /api/v1/sms-logs:
+    get: { summary: 短信发送日志, responses: { '200': { description: success } } }
+  /api/v1/external/sms-logs:
+    get:
+      summary: 外部查询发送日志
+      parameters: [{ name: X-API-Key, in: header, required: true, schema: { type: string } }]
+      responses: { '200': { description: success }, '401': { description: invalid API key } }
