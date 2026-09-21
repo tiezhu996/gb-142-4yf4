@@ -50,7 +50,7 @@ func main() {
 	templateService := service.NewTemplateService(templateRepo)
 	provider := service.NewLogSMSSender(smsLogRepo, logger)
 	smsService := service.NewSMSService(provider)
-	notificationService := service.NewNotificationService(recipientRepo, templateRepo, smsService, logger)
+	notificationService := service.NewNotificationService(recipientRepo, templateRepo, smsLogRepo, smsService, logger)
 	alertService := service.NewAlertService(recipientRepo, subscriptionRepo, smsService, cfg.ConfirmTimeout, logger)
 	statusService := service.NewStatusService(recipientRepo, cfg.ConfirmTimeout)
 	jobs, err := scheduler.New(notificationService, alertService, cfg.GreetingCronExpression, cfg.AlertCronExpression, logger)

@@ -77,6 +77,44 @@ func (r *RecipientRepository) DueForGreeting(ctx context.Context, now time.Time)
 	}
 	return due, nil
 }
+
+// ClaimForGreeting atomically marks a due recipient as being greeted by setting
+// last_greeting_at to now. The update only succeeds while the stored value still
+// equals previous, so concurrent scans cannot both claim the same recipient.
+// Callers pass recipients already filtered as due by DueForGreeting. It returns
+// true when this caller won the claim.
+func (r *RecipientRepository) ClaimForGreeting(ctx context.Context, id uint, previous *time.Time, now time.Time) (bool, error) {
+	query := r.db.WithContext(ctx).Model(&model.CareRecipient{}).
+		Where("id = ? AND status = ? AND care_start_at <= ?", id, constants.RecipientStatusActive, now)
+	if previous == nil {
+		query = query.Where("last_greeting_at IS NULL")
+	} else {
+		query = query.Where("last_greeting_at = ?", *previous)
+	}
+	result := query.Update("last_greeting_at", now)
+	if result.Error != nil {
+		return false, fmt.Errorf("claim greeting for recipient %d: %w", id, result.Error)
+	}
+	return result.RowsAffected == 1, nil
+}
+
+// ReleaseGreetingClaim restores the previous greeting time after a failed send,
+// but only when the stored value is still this caller's claim timestamp. It
+// returns true when the rollback was applied.
+func (r *RecipientRepository) ReleaseGreetingClaim(ctx context.Context, id uint, claimedAt time.Time, previous *time.Time) (bool, error) {
+	query := r.db.WithContext(ctx).Model(&model.CareRecipient{}).
+		Where("id = ? AND last_greeting_at = ?", id, claimedAt)
+	var result *gorm.DB
+	if previous == nil {
+		result = query.Update("last_greeting_at", gorm.Expr("NULL"))
+	} else {
+		result = query.Update("last_greeting_at", *previous)
+	}
+	if result.Error != nil {
+		return false, fmt.Errorf("release greeting claim for recipient %d: %w", id, result.Error)
+	}
+	return result.RowsAffected == 1, nil
+}
 func (r *RecipientRepository) Overdue(ctx context.Context, cutoff time.Time) ([]model.CareRecipient, error) {
 	var items []model.CareRecipient
 	err := r.db.WithContext(ctx).Where("status = ? AND care_start_at <= ? AND (last_confirmed_at IS NULL OR last_confirmed_at < ?)", constants.RecipientStatusActive, cutoff, cutoff).Find(&items).Error

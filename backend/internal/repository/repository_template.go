@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/blueship581/gbcarenotify/internal/model"
 	"gorm.io/gorm"
+	"math/rand"
 )
 
 type TemplateRepository struct{ db *gorm.DB }
@@ -60,17 +61,16 @@ func (r *TemplateRepository) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 func (r *TemplateRepository) RandomActive(ctx context.Context, category string) (*model.SMSTemplate, error) {
-	var item model.SMSTemplate
 	q := r.db.WithContext(ctx).Where("active = ?", true)
 	if category != "" {
 		q = q.Where("category = ?", category)
 	}
-	err := q.Order("RAND()").First(&item).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
+	var items []model.SMSTemplate
+	if err := q.Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("select random template: %w", err)
 	}
-	return &item, nil
+	if len(items) == 0 {
+		return nil, ErrNotFound
+	}
+	return &items[rand.Intn(len(items))], nil
 }
