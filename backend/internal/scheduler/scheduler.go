@@ -15,11 +15,11 @@ type Scheduler struct {
 func New(notification *service.NotificationService, alerts *service.AlertService, greetingSpec, alertSpec string, logger *slog.Logger) (*Scheduler, error) {
 	c := cron.New()
 	if _, err := c.AddFunc(greetingSpec, func() {
-		count, err := notification.SendDueGreetings(contextBackground())
+		result, err := notification.SendDueGreetings(contextBackground())
 		if err != nil {
 			logger.Error("scheduled greetings failed", "error", err)
 		} else {
-			logger.Info("scheduled greetings finished", "count", count)
+			logger.Info("scheduled greetings finished", "due", result.Due, "sent", result.Sent, "failed", result.Failed)
 		}
 	}); err != nil {
 		return nil, fmt.Errorf("register greeting cron: %w", err)

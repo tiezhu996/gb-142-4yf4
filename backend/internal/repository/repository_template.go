@@ -65,7 +65,7 @@ func (r *TemplateRepository) RandomActive(ctx context.Context, category string) 
 	if category != "" {
 		q = q.Where("category = ?", category)
 	}
-	err := q.Order("RAND()").First(&item).Error
+	err := q.Order(randomOrder(r.db.Dialector.Name())).First(&item).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrNotFound
 	}
@@ -73,4 +73,10 @@ func (r *TemplateRepository) RandomActive(ctx context.Context, category string) 
 		return nil, fmt.Errorf("select random template: %w", err)
 	}
 	return &item, nil
+}
+func randomOrder(dialect string) string {
+	if dialect == "mysql" {
+		return "RAND()"
+	}
+	return "RANDOM()"
 }

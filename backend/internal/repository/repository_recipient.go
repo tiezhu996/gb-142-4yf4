@@ -77,6 +77,34 @@ func (r *RecipientRepository) DueForGreeting(ctx context.Context, now time.Time)
 	}
 	return due, nil
 }
+
+// ClaimForGreeting atomically marks the recipient as greeted at now, but only
+// when it is still active and still due. The single conditional UPDATE makes
+// concurrent scans safe: exactly one scan can claim a recipient per round.
+func (r *RecipientRepository) ClaimForGreeting(ctx context.Context, id uint, frequency string, now time.Time) (bool, error) {
+	dueBefore := now.Add(-frequencyInterval(frequency))
+	result := r.db.WithContext(ctx).Model(&model.CareRecipient{}).
+		Where("id = ? AND status = ?", id, constants.RecipientStatusActive).
+		Where("last_greeting_at IS NULL OR last_greeting_at <= ?", dueBefore).
+		Updates(map[string]any{"last_greeting_at": now})
+	if result.Error != nil {
+		return false, fmt.Errorf("claim recipient %d for greeting: %w", id, result.Error)
+	}
+	return result.RowsAffected > 0, nil
+}
+
+// ReleaseGreetingClaim restores the previous last-greeting time after a failed
+// send, so the recipient stays due and is retried on the next scan. The
+// claimedAt guard avoids overwriting a newer claim.
+func (r *RecipientRepository) ReleaseGreetingClaim(ctx context.Context, id uint, claimedAt time.Time, previous *time.Time) error {
+	result := r.db.WithContext(ctx).Model(&model.CareRecipient{}).
+		Where("id = ? AND last_greeting_at = ?", id, claimedAt).
+		Updates(map[string]any{"last_greeting_at": previous})
+	if result.Error != nil {
+		return fmt.Errorf("release greeting claim for recipient %d: %w", id, result.Error)
+	}
+	return nil
+}
 func (r *RecipientRepository) Overdue(ctx context.Context, cutoff time.Time) ([]model.CareRecipient, error) {
 	var items []model.CareRecipient
 	err := r.db.WithContext(ctx).Where("status = ? AND care_start_at <= ? AND (last_confirmed_at IS NULL OR last_confirmed_at < ?)", constants.RecipientStatusActive, cutoff, cutoff).Find(&items).Error
